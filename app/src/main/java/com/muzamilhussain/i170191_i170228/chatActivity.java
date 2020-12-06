@@ -9,9 +9,12 @@ import androidx.recyclerview.widget.RecyclerView;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.database.Cursor;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.Color;
+import android.net.ConnectivityManager;
+import android.net.NetworkInfo;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
@@ -90,6 +93,9 @@ public class chatActivity extends AppCompatActivity {
     final String url = "http://192.168.43.173/bistro_chat/getChatMessages.php";
     final String profileUrl = "http://192.168.43.173/bistro_chat/get_profile.php";
 
+
+    private MyDBHelper db;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -107,6 +113,8 @@ public class chatActivity extends AppCompatActivity {
         is_online_inner_ac = findViewById(R.id.is_online_inner_ac);
 
         chatMessages = new ArrayList<>();
+
+        db = new MyDBHelper(this);
 
 
         sp=getSharedPreferences("user", Context.MODE_PRIVATE);
@@ -131,6 +139,9 @@ public class chatActivity extends AppCompatActivity {
         ((LinearLayoutManager) lm).setStackFromEnd(true);
         messageRecyclerView.setLayoutManager(lm);
         messageRecyclerView.setAdapter(adapter);
+
+        ConnectivityManager cm = (ConnectivityManager) this.getSystemService(Context.CONNECTIVITY_SERVICE);
+        NetworkInfo activeNetwork = cm.getActiveNetworkInfo();
 
         StringRequest MyStringRequest0 = new StringRequest(com.android.volley.Request.Method.POST, profileUrl,
 
@@ -186,59 +197,96 @@ public class chatActivity extends AppCompatActivity {
 
 
 
+        //if there is a network
+        if (activeNetwork != null) {
+            //if connected to wifi or mobile data plan
+            if (activeNetwork.getType() == ConnectivityManager.TYPE_WIFI || activeNetwork.getType() == ConnectivityManager.TYPE_MOBILE) {
+                StringRequest MyStringRequest = new StringRequest(com.android.volley.Request.Method.POST, url,
+
+                        new com.android.volley.Response.Listener<String>() {
+                            @Override
+                            public void onResponse(String response) {
+                                try {
+                                    JSONObject res=new JSONObject(response);
+
+                                    if (res.getString("response").equals("200")) {
+                                        JSONArray userMessages = res.getJSONArray("chatMessages");
+                                        for (int i=0;i<userMessages.length();i++) {
+                                            JSONObject singleMessageJsonObject = userMessages.getJSONObject(i);
+                                            final message singleMessage = new message(singleMessageJsonObject.getString("senderId"),
+                                                    singleMessageJsonObject.getString("receiverId"),
+                                                    singleMessageJsonObject.getString("message"));
+                                            singleMessage.setId(singleMessageJsonObject.getString("id"));
+                                            singleMessage.setIsFav(singleMessageJsonObject.getString("isFav"));
+                                            singleMessage.setIsLast(singleMessageJsonObject.getString("isLast"));
+                                            singleMessage.setIsSeen(singleMessageJsonObject.getString("isSeen"));
 
 
-        StringRequest MyStringRequest = new StringRequest(com.android.volley.Request.Method.POST, url,
+                                            db.sendMessage(Integer.parseInt(singleMessage.getId()),
+                                                    singleMessage.getSenderId(),
+                                                    singleMessage.getReceiverId(),
+                                                    singleMessageJsonObject.getString("chatId"),
+                                                    singleMessage.getMessage(),
+                                                    singleMessage.getDate(),
+                                                    singleMessage.getIsLast(),
+                                                    singleMessage.getIsSeen(),
+                                                    singleMessage.getIsFav());
 
-                new com.android.volley.Response.Listener<String>() {
-                    @Override
-                    public void onResponse(String response) {
-                        try {
-                            JSONObject res=new JSONObject(response);
-
-                            if (res.getString("response").equals("200")) {
-                                JSONArray userMessages = res.getJSONArray("chatMessages");
-                                for (int i=0;i<userMessages.length();i++) {
-                                    JSONObject singleMessageJsonObject = userMessages.getJSONObject(i);
-                                    final message singleMessage = new message(singleMessageJsonObject.getString("senderId"),
-                                            singleMessageJsonObject.getString("receiverId"),
-                                            singleMessageJsonObject.getString("message"));
-                                    singleMessage.setId(singleMessageJsonObject.getString("id"));
-                                    singleMessage.setIsFav(singleMessageJsonObject.getString("isFav"));
-                                    singleMessage.setIsLast(singleMessageJsonObject.getString("isLast"));
-                                    singleMessage.setIsSeen(singleMessageJsonObject.getString("isSeen"));
-
-                                    chatMessages.add(singleMessage);
-                                    adapter.notifyDataSetChanged();
-                                }
+                                            chatMessages.add(singleMessage);
+                                            adapter.notifyDataSetChanged();
+                                        }
 //                                adapter = new chatAdapter(chatMessages, chatActivity.this);
 //                                lm = new LinearLayoutManager(chatActivity.this);
 //                                ((LinearLayoutManager) lm).setStackFromEnd(true);
 //                                messageRecyclerView.setLayoutManager(lm);
 //                                messageRecyclerView.setAdapter(adapter);
-                            }
+                                    }
 
-                        } catch (JSONException e) {
-                            Toast.makeText(chatActivity.this,e.toString(),Toast.LENGTH_LONG).show();
-                            e.printStackTrace();
-                        }
-                        Log.d("MyStringRequest",response);
+                                } catch (JSONException e) {
+                                    Toast.makeText(chatActivity.this,e.toString(),Toast.LENGTH_LONG).show();
+                                    e.printStackTrace();
+                                }
+                                Log.d("MyStringRequest",response);
+                            }
+                        },
+                        new com.android.volley.Response.ErrorListener() { //Create an error listener to handle errors appropriately.
+                            @Override
+                            public void onErrorResponse(VolleyError error) {
+                                //This code is executed if there is an error.
+                                Toast.makeText(chatActivity.this,error.toString(),Toast.LENGTH_LONG).show();
+                            }
+                        }) {
+                    protected Map<String, String> getParams() {
+                        Map<String, String> data = new HashMap<String, String>();
+                        data.put("chatId", chatId);
+                        return data;
                     }
-                },
-                new com.android.volley.Response.ErrorListener() { //Create an error listener to handle errors appropriately.
-                    @Override
-                    public void onErrorResponse(VolleyError error) {
-                        //This code is executed if there is an error.
-                        Toast.makeText(chatActivity.this,error.toString(),Toast.LENGTH_LONG).show();
-                    }
-                }) {
-            protected Map<String, String> getParams() {
-                Map<String, String> data = new HashMap<String, String>();
-                data.put("chatId", chatId);
-                return data;
+                };
+                Volley.newRequestQueue(chatActivity.this).add(MyStringRequest);
             }
-        };
-        Volley.newRequestQueue(chatActivity.this).add(MyStringRequest);
+
+        }
+        else {
+            Cursor cursor = db.getChatMessages(chatId);
+
+            if (cursor.moveToFirst()) {
+                do {
+                    final message singleMessage = new message();
+
+                    singleMessage.setSenderId(cursor.getString(cursor.getColumnIndex("senderId")));
+                    singleMessage.setReceiverId(cursor.getString(cursor.getColumnIndex("receiverId")));
+                    singleMessage.setId(cursor.getString(cursor.getColumnIndex("id")));
+                    singleMessage.setMessage(cursor.getString(cursor.getColumnIndex("message")));
+                    singleMessage.setIsSeen(cursor.getString(cursor.getColumnIndex("isSeen")));
+                    singleMessage.setIsLast(cursor.getString(cursor.getColumnIndex("isLast")));
+                    singleMessage.setIsSeen(cursor.getString(cursor.getColumnIndex("isSeen")));
+
+                    chatMessages.add(singleMessage);
+                    adapter.notifyDataSetChanged();
+
+                } while (cursor.moveToNext());
+            }
+        }
 
 
 

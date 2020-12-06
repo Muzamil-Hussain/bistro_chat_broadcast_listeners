@@ -245,28 +245,45 @@ public class MyDBHelper extends SQLiteOpenHelper {
 
 
 
-    public boolean sendMessage (String senderId, String receiverId, String chatId,
+    public boolean sendMessage (final int id,String senderId, String receiverId, String chatId,
                                 String message, Date date, String isLast, String isSeen, String isFav) {
 
-        SQLiteDatabase db = this.getWritableDatabase();
 
-        SimpleDateFormat dateFormat = new SimpleDateFormat("HH:mm");
-        date = new Date();
-        ContentValues contentValues = new ContentValues();
 
-        contentValues.put(contractClass.UserChat._senderId,senderId);
-        contentValues.put(contractClass.UserChat._receiverId,receiverId);
-        contentValues.put(contractClass.UserChat._chatId,chatId);
-        contentValues.put(contractClass.UserChat._message,message);
-        contentValues.put(contractClass.UserChat._date,dateFormat.format(date));
-        contentValues.put(contractClass.UserChat._isLast,isLast);
-        contentValues.put(contractClass.UserChat._isFav,isFav);
-        contentValues.put(contractClass.UserChat._isSeen,isSeen);
+        SQLiteDatabase db = this.getReadableDatabase();
 
-        db.insert(contractClass.UserChat.tableName,null,contentValues);
-        db.close();
+        String sql = "SELECT * FROM " + contractClass.UserChat.tableName + " WHERE " + contractClass.UserChat._ID + "=" + id;
+        Cursor c = db.rawQuery(sql, null);
+
+        boolean chatMsgExists = false;
+        if (c.getCount() > 0) {
+            chatMsgExists = true;
+        }
+
+        if (!chatMsgExists) {
+            db = this.getWritableDatabase();
+
+            SimpleDateFormat dateFormat = new SimpleDateFormat("HH:mm");
+            date = new Date();
+            ContentValues contentValues = new ContentValues();
+
+            contentValues.put(contractClass.UserChat._status,1);
+            contentValues.put(contractClass.UserChat._senderId,senderId);
+            contentValues.put(contractClass.UserChat._receiverId,receiverId);
+            contentValues.put(contractClass.UserChat._chatId,chatId);
+            contentValues.put(contractClass.UserChat._message,message);
+            contentValues.put(contractClass.UserChat._date,dateFormat.format(date));
+            contentValues.put(contractClass.UserChat._isLast,isLast);
+            contentValues.put(contractClass.UserChat._isFav,isFav);
+            contentValues.put(contractClass.UserChat._isSeen,isSeen);
+
+            db.insert(contractClass.UserChat.tableName,null,contentValues);
+            db.close();
+
+        }
         return true;
     }
+
 
     public boolean updateMessageStatus (int id, int status) {
         SQLiteDatabase db = this.getWritableDatabase();
@@ -281,6 +298,13 @@ public class MyDBHelper extends SQLiteOpenHelper {
     public Cursor getUnsyncedMessages() {
         SQLiteDatabase db = this.getReadableDatabase();
         String sql = "SELECT * FROM " + contractClass.UserChat.tableName + " WHERE " + contractClass.UserChat._status + " = 0;";
+        Cursor c = db.rawQuery(sql, null);
+        return c;
+    }
+
+    public Cursor getChatMessages (final String chatId) {
+        SQLiteDatabase db = this.getReadableDatabase();
+        String sql = "SELECT * FROM " + contractClass.UserChat.tableName + " WHERE " + contractClass.UserChat._chatId + " = " + chatId;
         Cursor c = db.rawQuery(sql, null);
         return c;
     }
